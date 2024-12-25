@@ -22,3 +22,7 @@ game_kb = InlineKeyboardMarkup(inline_keyboard=[
      [InlineKeyboardButton(text='🌟 Присоединиться', callback_data='game_join'), 
       InlineKeyboardButton(text='🧨 Удалить', callback_data='game_delete')]
 ])
+
+select_kb = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Выбрать", callback_data='choose_num')]
+])

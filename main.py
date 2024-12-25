@@ -27,12 +27,18 @@ class MoneyWithdraw(StatesGroup):
     amount = State()
     w_adress = State()
 
-class GetRoomNumber(StatesGroup):
+class GetRoomNumberDel(StatesGroup):
+    game_id = State()
+
+class GetRoomNumberJoin(StatesGroup):
     game_id = State()
 
 class CreateGame(StatesGroup):
     game_id = State()
     bet_amount = State()
+
+class ChooseNumber(StatesGroup):
+    chosen_number = State()
 
 
 @dp.message(CommandStart())
@@ -41,24 +47,22 @@ async def cmd_start(message: Message):
     if database.user_exists(user_id) == False:
         database.add_user(user_id)
     await message.answer('* Добро пожаловать в самую лучшую версию кубов во всем снг * \
-                         \n\n* 1. Игра длится 6 минут, после чего побеждает тот, кто набрал большее кол-во очков. * \
-                         \n\n* 2. Игра может завершиться досрочно, если один из игроков набирает 3 очка. *\
-                         \n\n* 3. Минимальная сумма игры - 10 рублей. * \
-                         \n\n* 4. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
-                         \n\n* 5. Необходимо угадать число, которое выпадет на кости. * \
-                         \n\n* 6. Комиссия от выигрыша составляет - 10% \
+                         \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
+                         \n\n* 2. Минимальная сумма игры - 10 рублей. * \
+                         \n\n* 3. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
+                         \n\n* 4. Необходимо угадать число, которое выпадет на кости. * \
+                         \n\n* 5. Комиссия от выигрыша составляет - 10% \
                          \n\n* Удачной игры! *', reply_markup=main_kb)
 
 
 @dp.message(F.text == '❗Правила')
 async def rules(message: Message):
     await message.reply('* Добро пожаловать в самую лучшую версию кубов во всем снг * \
-                         \n\n* 1. Игра длится 6 минут, после чего побеждает тот, кто набрал большее кол-во очков. * \
-                         \n\n* 2. Игра может завершиться досрочно, если один из игроков набирает 3 очка. *\
-                         \n\n* 3. Минимальная сумма игры - 10 рублей. * \
-                         \n\n* 4. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
-                         \n\n* 5. Необходимо угадать число, которое выпадет на кости. * \
-                         \n\n* 6. Комиссия от выигрыша составляет - 10% \
+                         \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
+                         \n\n* 2. Минимальная сумма игры - 10 рублей. * \
+                         \n\n* 3. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
+                         \n\n* 4. Необходимо угадать число, которое выпадет на кости. * \
+                         \n\n* 5. Комиссия от выигрыша составляет - 10% \
                          \n\n* Удачной игры! *', reply_markup=main_kb)
     
 
@@ -88,11 +92,11 @@ async def show_games(callback: CallbackQuery):
 async def game_delete_first(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     await callback.answer('Ожидайте')
-    await state.set_state(GetRoomNumber.game_id)
+    await state.set_state(GetRoomNumberDel.game_id)
     await bot.send_message(user_id, "Введите номер комнаты ->")
 
 
-@dp.message(GetRoomNumber.game_id)
+@dp.message(GetRoomNumberDel.game_id)
 async def game_delete_main(message: Message, state: FSMContext):
     user_id = message.from_user.id
     await state.update_data(game_id=message.text)
@@ -100,7 +104,137 @@ async def game_delete_main(message: Message, state: FSMContext):
     if database.game_exists(data["game_id"]) == True and database.game_status(data["game_id"]) == 1:
         await state.clear()
         return await bot.send_message(user_id, database.game_delete(user_id, data["game_id"]))
-    
+    else:
+        await state.clear()
+        return await bot.send_message(user_id, "Такой комнаты не существует или она находится в процессе игры")
+
+
+@dp.callback_query(F.data == 'game_join')
+async def game_join_first(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await callback.answer('Ожидайте')
+    await state.set_state(GetRoomNumberJoin.game_id)
+    await bot.send_message(user_id, "Введите номер комнаты ->")
+
+
+@dp.message(GetRoomNumberJoin.game_id)
+async def game_join_main(message: Message, state: FSMContext):
+    second_user_id = message.from_user.id
+    player_balance = database.check_balance(second_user_id)
+    await state.update_data(game_id=message.text)
+    data = await state.get_data()
+    if database.check_player_in_game(second_user_id) == True:
+        await state.clear()
+        return await message.reply("Вы уже находитесь в игре или у вас создана комната")
+    if database.game_exists(data["game_id"]) == False:
+        await state.clear()
+        return await message.reply("Такой комнаты не существует")
+    if player_balance < database.check_game_bet_amount(data["game_id"]):
+        await state.clear()
+        return await message.reply("У вас недостаточно средств")
+    database.game_join(data["game_id"], second_user_id)
+    first_user_id = database.check_first_user_id(data["game_id"])
+    await bot.send_message(first_user_id, "❗В вашу комнату зашел игрок❗\n\n\n \
+                         \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
+                         \n\n* 2. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
+                         \n\n* 3. Необходимо написать и угадать число (1-9), которое выпадет на кости (её кидает бот). * \
+                         \n\n\n❗Бот сообщит о вашем ходе❗")
+    await bot.send_message(second_user_id, "❗Вы успешно зашли в комнату❗\n\n\n \
+                        \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
+                        \n\n* 2. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
+                        \n\n* 3. Необходимо написать и угадать число (1-9), которое выпадет на кости (её кидает бот). * \
+                        \n\n\n❗Бот сообщит о вашем ходе❗")
+    await bot.send_message(first_user_id, "❗Ваш ход❗", reply_markup=select_kb)
+    game_id = database.get_game_id(first_user_id)
+    database.set_turn_id(game_id, first_user_id)
+    await state.clear()
+
+
+@dp.callback_query(F.data == 'choose_num')
+async def game_choose_number_fist(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await state.set_state(ChooseNumber.chosen_number)
+    await bot.send_message(user_id, "Введите ваше число ->")
+
+
+@dp.message(ChooseNumber.chosen_number)
+async def game_choose_number(message: Message, state: FSMContext):
+    await state.update_data(chosen_number=message.text)
+    data = await state.get_data()
+    user_msg = data["chosen_number"]
+    user_id = message.from_user.id
+    if database.check_player_in_active_game(user_id) == False:
+        await state.clear()
+        return await message.reply("Неизвестная команда")
+    game_id = database.get_game_id(user_id)
+    if database.check_which_turn(game_id) != user_id:
+        await state.clear()
+        return await message.reply("❗Не ваша очередь ходить❗")
+    if int(user_msg) not in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+        await state.clear()
+        return await message.reply("❗Необходимо указать число от 1 до 9❗")
+    else:
+        game_id = database.get_game_id(user_id)
+        user_num_choose = int(user_msg)
+        game_bet = database.check_game_bet_amount(game_id)
+        msg = await bot.send_dice(user_id)
+        await asyncio.sleep(5)
+        dice_value = int(msg.dice.value)
+
+        if user_num_choose == dice_value:
+            if database.check_which_num_user(user_id) == "first_user_id":
+                second_user_id = database.check_second_user_id(game_id)
+                database.game_update_score(user_id)
+                await bot.send_message(user_id, f"🍀Вы угадали🍀, Ваш счёт: {database.game_check_score(user_id)}")
+                await bot.send_message(second_user_id, f"🔴Ваш оппонент угадал🔴, Его счёт: {database.game_check_score(user_id)}")
+                if database.check_score_end(user_id) == True:
+                    await bot.send_message(user_id, "🍀Вы выиграли, игра закончена🍀")
+                    await bot.send_message(second_user_id,"🔴Вы проиграли, игра закончена🔴" )
+                    database.user_won(user_id, game_bet)
+                    database.user_lose(second_user_id, game_bet)
+                    database.game_done(user_id, user_id, second_user_id, game_bet)
+                    await state.clear()
+                    return database.game_done_del(game_id)
+                else:
+                    database.set_turn_id(game_id, second_user_id)
+                    await state.clear()
+                    return await bot.send_message(second_user_id, "❗Ваш ход❗", reply_markup=select_kb)
+                
+            if database.check_which_num_user(user_id) == "second_user_id":
+                first_user_id = database.check_first_user_id(game_id)
+                database.game_update_score(user_id)
+                await bot.send_message(user_id, f"🍀Вы угадали🍀, Ваш счёт: {database.game_check_score(user_id)}")
+                await bot.send_message(first_user_id, f"🔴Ваш оппонент угадал🔴, Его счёт: {database.game_check_score(user_id)}")
+                if database.check_score_end(user_id) == True:
+                    await bot.send_message(user_id, "🍀Вы выиграли, игра закончена🍀")
+                    await bot.send_message(first_user_id,"🔴Вы проиграли, игра закончена🔴")
+                    database.user_won(user_id, game_bet)
+                    database.user_lose(first_user_id, game_bet)
+                    database.game_done(user_id, first_user_id, user_id, game_bet)
+                    await state.clear()
+                    return database.game_done_del(game_id)
+                else:
+                    database.set_turn_id(game_id, first_user_id)
+                    await state.clear()
+                    return await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+        else:
+
+            if database.check_which_num_user(user_id) == "first_user_id":
+                second_user_id = database.check_second_user_id(game_id)
+                await bot.send_message(user_id, "🔴Вы не угадали🔴")
+                await bot.send_message(second_user_id, "🍀Ваш оппонент не угадал🍀")
+                database.set_turn_id(game_id, second_user_id)
+                await state.clear()
+                return await bot.send_message(second_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+
+            if database.check_which_num_user(user_id) == "second_user_id":
+                first_user_id = database.check_first_user_id(game_id)
+                await bot.send_message(user_id, "🔴Вы не угадали🔴")
+                await bot.send_message(first_user_id, "🍀Ваш оппонент не угадал🍀")
+                database.set_turn_id(game_id, first_user_id)
+                await state.clear()
+                return await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+
 
 @dp.callback_query(F.data == 'show_withdraws')
 async def show_withdraws(callback: CallbackQuery):

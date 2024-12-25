@@ -141,20 +141,21 @@ class Database:
             return game_status
 
     def game_create(self, game_id, user_id, bet_amount):
+        turn_id = 0
         game_status = 1
         score = 0
         with self.connection:
             return self.cursor.execute("""INSERT INTO game
-                (game_id, first_user_id, bet_amount, game_status, first_user_score, second_user_score)
-                    VALUES (%s, %s, %s, %s, %s, %s)""",
-                        (game_id, user_id, bet_amount, game_status, score, score))
+                (game_id, first_user_id, bet_amount, game_status, first_user_score, second_user_score, turn_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                        (game_id, user_id, bet_amount, game_status, score, score, turn_id))
         
     def game_join(self, game_id, user_id):
         with self.connection:
             return self.cursor.execute("""UPDATE game SET second_user_id = %s, game_status = 2
                     WHERE game_id = %s""", (user_id, game_id))
     
-    def game_done(self, game_id):
+    def game_done_del(self, game_id):
         with self.connection:
             return self.cursor.execute(f"DELETE FROM game WHERE \
                                        game_id = '{game_id}'")
@@ -189,4 +190,104 @@ class Database:
                                 first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
             if self.cursor.fetchone():
                 return True
+            return False
+
+    def check_player_in_active_game(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT * FROM game WHERE \
+                                first_user_id = '{user_id}' OR second_user_id = '{user_id}' AND game_status = 2")
+            if self.cursor.fetchone():
+                return True
+            return False
+
+    def check_game_bet_amount(self, game_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT bet_amount FROM game WHERE \
+                    game_id = '{game_id}'")
+            bet_amount = 0
+            for i in self.cursor.fetchone():
+                bet_amount += i
+            return bet_amount
+    
+    def check_first_user_id(self, game_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT first_user_id FROM game WHERE \
+                    game_id = '{game_id}'")
+            first_user_id = 0
+            for i in self.cursor.fetchone():
+                first_user_id += i
+            return first_user_id
+    
+    def check_second_user_id(self, game_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT second_user_id FROM game WHERE \
+                    game_id = '{game_id}'")
+            first_user_id = 0
+            for i in self.cursor.fetchone():
+                first_user_id += i
+            return first_user_id
+    
+    def check_which_num_user(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT * FROM game WHERE \
+                    first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
+            for i in self.cursor.fetchall():
+                if int(i[1]) == user_id:
+                    return "first_user_id" 
+            return "second_user_id"
+    
+    def check_which_turn(self, game_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT turn_id FROM game WHERE \
+                                game_id = '{game_id}'")
+            turn_id = 0
+            for i in self.cursor.fetchone():
+                turn_id += i
+            return turn_id
+
+    def get_game_id(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT game_id FROM game WHERE \
+                                first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
+            game_id = 0
+            for i in self.cursor.fetchone():
+                game_id += i
+            return game_id
+
+    def set_turn_id(self, game_id, user_id):
+        with self.connection:
+            return self.cursor.execute("""UPDATE game SET turn_id = %s
+                WHERE game_id = %s""", (user_id, game_id))
+    
+    def game_update_score(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT * FROM game WHERE \
+                                first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
+            for i in self.cursor.fetchall():
+                if int(i[1]) == user_id:
+                    score = int(i[5]) + 1
+                    return self.cursor.execute("""UPDATE game SET first_user_score = %s
+                WHERE first_user_id = %s""", (score, user_id))
+                if int(i[2]) == user_id:
+                    score = int(i[6]) + 1
+                    return self.cursor.execute("""UPDATE game SET second_user_score = %s
+                WHERE second_user_id = %s""", (score, user_id))
+    
+    def game_check_score(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT * FROM game WHERE \
+                                first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
+            for i in self.cursor.fetchall():
+                if int(i[1]) == user_id:
+                    return int(i[5])
+                if int(i[2]) == user_id:
+                    return int(i[6])
+    
+    def check_score_end(self, user_id):
+        with self.connection:
+            self.cursor.execute(f"SELECT * FROM game WHERE \
+                                first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
+            for i in self.cursor.fetchall():
+                if int(i[5]) == 1 or int(i[6]) == 2:
+                    return True
             return False
