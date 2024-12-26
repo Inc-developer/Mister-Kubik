@@ -175,11 +175,13 @@ async def game_join_main(message: Message, state: FSMContext):
                          \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
                          \n\n* 2. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
                          \n\n* 3. Необходимо написать и угадать число (1-9), которое выпадет на кости (её кидает бот). * \
+                         \n\n* 4. Когда бот сообщит о вашем ходе, необходите нажать на кнопку 'Выбрать' под его сообщением * \
                          \n\n\n❗Бот сообщит о вашем ходе❗")
     await bot.send_message(second_user_id, "❗Вы успешно зашли в комнату❗\n\n\n \
                         \n\n* 1. Игра длится пока один из игроков не наберет 2 очка. *\
                         \n\n* 2. Время на ход для каждого игрока - 30 секунд, после чего игрок автоматически проигрывает. * \
                         \n\n* 3. Необходимо написать и угадать число (1-9), которое выпадет на кости (её кидает бот). * \
+                        \n\n* 4. Когда бот сообщит о вашем ходе, необходите нажать на кнопку 'Выбрать' под его сообщением * \
                         \n\n\n❗Бот сообщит о вашем ходе❗")
     await bot.send_message(first_user_id, "❗Ваш ход❗", reply_markup=select_kb)
     game_id = database.get_game_id(first_user_id)
@@ -216,13 +218,16 @@ async def game_choose_number(message: Message, state: FSMContext):
         game_id = database.get_game_id(user_id)
         user_num_choose = int(user_msg)
         game_bet = database.check_game_bet_amount(game_id)
-        msg = await bot.send_dice(user_id)
-        await asyncio.sleep(5)
+        msg = await bot.send_dice(user_id, protect_content=None)
+        msg_id = int(msg.message_id)
         dice_value = int(msg.dice.value)
 
         if user_num_choose == dice_value:
             if database.check_which_num_user(user_id) == "first_user_id":
                 second_user_id = database.check_second_user_id(game_id)
+                await bot.send_message(second_user_id, f"Оппонент: {user_num_choose}")
+                await bot.forward_message(second_user_id, user_id, msg_id)
+                await asyncio.sleep(4)
                 database.game_update_score(user_id)
                 await bot.send_message(user_id, f"🍀Вы угадали🍀, Ваш счёт: {database.game_check_score(user_id)}")
                 await bot.send_message(second_user_id, f"🔴Ваш оппонент угадал🔴, Его счёт: {database.game_check_score(user_id)}")
@@ -242,6 +247,9 @@ async def game_choose_number(message: Message, state: FSMContext):
                 
             if database.check_which_num_user(user_id) == "second_user_id":
                 first_user_id = database.check_first_user_id(game_id)
+                await bot.send_message(first_user_id, f"Оппонент: {user_num_choose}")
+                await bot.forward_message(first_user_id, user_id, msg_id)
+                await asyncio.sleep(4)
                 database.game_update_score(user_id)
                 await bot.send_message(user_id, f"🍀Вы угадали🍀, Ваш счёт: {database.game_check_score(user_id)}")
                 await bot.send_message(first_user_id, f"🔴Ваш оппонент угадал🔴, Его счёт: {database.game_check_score(user_id)}")
@@ -261,6 +269,9 @@ async def game_choose_number(message: Message, state: FSMContext):
         else:
             if database.check_which_num_user(user_id) == "first_user_id":
                 second_user_id = database.check_second_user_id(game_id)
+                await bot.send_message(second_user_id, f"Оппонент: {user_num_choose}")
+                await bot.forward_message(second_user_id, user_id, msg_id)
+                await asyncio.sleep(4)
                 await bot.send_message(user_id, "🔴Вы не угадали🔴")
                 await bot.send_message(second_user_id, "🍀Ваш оппонент не угадал🍀")
                 database.set_turn_id(game_id, second_user_id)
@@ -270,6 +281,9 @@ async def game_choose_number(message: Message, state: FSMContext):
 
             if database.check_which_num_user(user_id) == "second_user_id":
                 first_user_id = database.check_first_user_id(game_id)
+                await bot.send_message(first_user_id, f"Оппонент: {user_num_choose}")
+                await bot.forward_message(first_user_id, user_id, msg_id)
+                await asyncio.sleep(4)
                 await bot.send_message(user_id, "🔴Вы не угадали🔴")
                 await bot.send_message(first_user_id, "🍀Ваш оппонент не угадал🍀")
                 database.set_turn_id(game_id, first_user_id)
