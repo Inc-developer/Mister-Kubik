@@ -288,6 +288,6 @@ class Database:
             self.cursor.execute(f"SELECT * FROM game WHERE \
                                 first_user_id = '{user_id}' OR second_user_id = '{user_id}'")
             for i in self.cursor.fetchall():
-                if int(i[5]) == 1 or int(i[6]) == 2:
+                if int(i[5]) == 2 or int(i[6]) == 2:
                     return True
             return False

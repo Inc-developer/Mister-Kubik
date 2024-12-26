@@ -117,6 +117,43 @@ async def game_join_first(callback: CallbackQuery, state: FSMContext):
     await bot.send_message(user_id, "Введите номер комнаты ->")
 
 
+async def start_timer(user_id):
+    global is_running
+    is_running = True
+    n = 30
+    while is_running:
+        n -= 1
+        await asyncio.sleep(1)
+        if n == 0:
+            game_id = database.get_game_id(user_id)
+            game_bet = database.check_game_bet_amount(game_id)
+            is_running = False
+            if database.check_which_num_user(user_id) == "first_user_id":
+                second_user_id = database.check_second_user_id(game_id)
+                await bot.send_message(user_id, "🔴Время на ход закончилось, вы проиграли🔴")
+                await bot.send_message(second_user_id,"🍀Вы выиграли, у противника закончилось время на ход🍀")
+                database.user_won(second_user_id, game_bet)
+                database.user_lose(user_id, game_bet)
+                database.game_done(second_user_id, user_id, second_user_id, game_bet)
+                database.game_done_del(game_id)
+                return is_running
+            if database.check_which_num_user(user_id) == "second_user_id":
+                first_user_id = database.check_first_user_id(game_id)
+                await bot.send_message(user_id, "🔴Время на ход закончилось, вы проиграли🔴")
+                await bot.send_message(first_user_id,"🍀Вы выиграли, у противника закончилось время на ход🍀" )
+                database.user_won(first_user_id, game_bet)
+                database.user_lose(user_id, game_bet)
+                database.game_done(first_user_id, first_user_id, user_id, game_bet)
+                database.game_done_del(game_id)
+                return is_running
+
+
+async def stop_timer():
+    global is_running
+    is_running = False
+    return is_running
+
+
 @dp.message(GetRoomNumberJoin.game_id)
 async def game_join_main(message: Message, state: FSMContext):
     second_user_id = message.from_user.id
@@ -148,6 +185,7 @@ async def game_join_main(message: Message, state: FSMContext):
     game_id = database.get_game_id(first_user_id)
     database.set_turn_id(game_id, first_user_id)
     await state.clear()
+    return await start_timer(first_user_id)
 
 
 @dp.callback_query(F.data == 'choose_num')
@@ -174,6 +212,7 @@ async def game_choose_number(message: Message, state: FSMContext):
         await state.clear()
         return await message.reply("❗Необходимо указать число от 1 до 9❗")
     else:
+        await stop_timer()
         game_id = database.get_game_id(user_id)
         user_num_choose = int(user_msg)
         game_bet = database.check_game_bet_amount(game_id)
@@ -198,7 +237,8 @@ async def game_choose_number(message: Message, state: FSMContext):
                 else:
                     database.set_turn_id(game_id, second_user_id)
                     await state.clear()
-                    return await bot.send_message(second_user_id, "❗Ваш ход❗", reply_markup=select_kb)
+                    await bot.send_message(second_user_id, "❗Ваш ход❗", reply_markup=select_kb)
+                    return await start_timer(second_user_id)
                 
             if database.check_which_num_user(user_id) == "second_user_id":
                 first_user_id = database.check_first_user_id(game_id)
@@ -216,16 +256,17 @@ async def game_choose_number(message: Message, state: FSMContext):
                 else:
                     database.set_turn_id(game_id, first_user_id)
                     await state.clear()
-                    return await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                    await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                    return await start_timer(first_user_id)
         else:
-
             if database.check_which_num_user(user_id) == "first_user_id":
                 second_user_id = database.check_second_user_id(game_id)
                 await bot.send_message(user_id, "🔴Вы не угадали🔴")
                 await bot.send_message(second_user_id, "🍀Ваш оппонент не угадал🍀")
                 database.set_turn_id(game_id, second_user_id)
                 await state.clear()
-                return await bot.send_message(second_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                await bot.send_message(second_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                return await start_timer(second_user_id)
 
             if database.check_which_num_user(user_id) == "second_user_id":
                 first_user_id = database.check_first_user_id(game_id)
@@ -233,7 +274,8 @@ async def game_choose_number(message: Message, state: FSMContext):
                 await bot.send_message(first_user_id, "🍀Ваш оппонент не угадал🍀")
                 database.set_turn_id(game_id, first_user_id)
                 await state.clear()
-                return await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                await bot.send_message(first_user_id,"❗Ваш ход❗", reply_markup=select_kb)
+                return await start_timer(first_user_id)
 
 
 @dp.callback_query(F.data == 'show_withdraws')
